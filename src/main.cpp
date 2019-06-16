@@ -10,41 +10,129 @@
 
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/stat.h>
+
+using namespace cv;
+using namespace std;
+
 
 bool loadImageFiles(std::string dirName, std::string ext, std::vector<std::string> &imageFileName)
 {
-    DIR* dp=opendir(dirName.c_str());
+    int i, dirElements;
+    string search_path;
 
-    std::cout << "aa" << std::endl;
+    struct stat stat_buf;
+    struct dirent **namelist=NULL;
 
-    if (dp!=NULL) {
+    cout << dirName << endl;
 
-        struct dirent* dent;
-        
-        do {
-            dent = readdir(dp);
-            if (dent!=NULL) {
-                std::cout << dent->d_name << std::endl;   
+    // dirElements にはディレクトリ内の要素数が入る
+    dirElements = scandir(dirName.c_str(), &namelist, NULL, NULL);
+
+    if(dirElements == -1) {
+        cout << "ERROR" <<  endl;
+    }
+    else {
+        //ディレクトリかファイルかを順番に識別
+        for (i=0; i<dirElements; i+=1) {
+
+            // "." と ".." を除く
+            if( (strcmp(namelist[i]->d_name , ".\0") != 0) && (strcmp(namelist[i]->d_name , "..\0") != 0) ) {
+
+                //search_pathには検索対象のフルパスを格納する
+                search_path = dirName + string(namelist[i] -> d_name);
+
+                // ファイル情報の取得の成功
+                if (stat(search_path.c_str(), &stat_buf) == 0) {
+
+                    // ディレクトリだった場合の処理
+                    if ((stat_buf.st_mode & S_IFMT) == S_IFDIR){
+                        // 再帰によりディレクトリ内を探索
+                        loadImageFiles(dirName + string(namelist[i] -> d_name) + "/", ext, imageFileName);
+                    }
+                    else {
+                        //ファイルだった場合の処理
+                        cout << search_path << endl;
+                        imageFileName.push_back(search_path);
+                    }
+                }
+                else {
+                    // ファイル情報の取得の失敗
+                    cout << "ERROR" <<  endl << endl;
+                }
             }
-        } while(dent!=NULL);
-        
-        closedir(dp);
+        }
     }
 
+    free(namelist);
+    
     return true;
+}
+
+bool getImageFileList(string path, vector<string> &imageFileName, string extension)
+{
+	string fname;
+
+	// readdir() で返されるエントリーポイント
+   dirent* entry;
+
+    cout << "path = " << path << endl;
+
+	// ディレクトリへのポインタ
+	DIR *dp;
+	dp = opendir(path.c_str());
+
+    int eno = errno;
+    cout << "errno = " << eno << endl;
+
+
+	if (dp==NULL) return false;
+
+    cout << "kita?" << endl;
+
+	do {
+		// エントリーポイント
+		entry = readdir(dp);
+
+		if (entry != NULL) {
+			fname = entry->d_name;
+			//cout << fname << endl;
+
+			// ファイルの場合
+			//int pos = fname.find("refImg.pgm");
+			//int pos1 = fname.find(prefix);
+			int pos2 = fname.find(extension);
+			if (pos2 < 0) continue;
+			//if (pos1 < 0 || pos2 < 0) continue;
+
+            cout << path+fname << endl;
+			imageFileName.push_back(path+fname);
+		}
+
+	} while (entry != NULL);
+
+	closedir(dp);
+
+	return true;
 }
 
 int main( int argc, char *argv[] )
 {
-	using namespace cv;
-    using namespace std;
-
     // 画像データのディレクトリ指定
-    string dirName = "~/Pictures/timelapse_20190616/part1/";
+    string path = "/home/kazuo/Pictures/timelapse_20190616/part1";
+    //string path = "/home/kazuo/work/devCpp/testOpenCV/data/";
 
     // 画像データのロード
     vector<string> imageFileName;
-    if (!loadImageFiles(dirName, ".JPG", imageFileName)) return 0;
+    if (!getImageFileList(path, imageFileName, ".JPG")) return 0;
+
+    sort(imageFileName.begin(), imageFileName.end());
+
+    for (int i=0; i< imageFileName.size(); i++) {
+        cout << i << ", " << imageFileName[i] << endl;
+    }
+
+    return 0;
 
     // オリジナルの画像サイズ
 
@@ -54,11 +142,11 @@ int main( int argc, char *argv[] )
 
     // 表示してみる
 
-    cv::Mat m = cv::imread("../data/RefMain00.pgm", 1);
+    /* cv::Mat m = cv::imread("../data/RefMain00.pgm", 1);
     cv::namedWindow("sample", cv::WINDOW_AUTOSIZE);
     cv::imshow("sample", m);
     cv::waitKey(0);
-    cv::destroyAllWindows();
+    cv::destroyAllWindows();*/
 
     return 0;
 
